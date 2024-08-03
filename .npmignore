@@ -2,7 +2,6 @@
 .eslintrc
 .gitignore
 .npmignore
-.travis.yml
 .vscode
 components
 coverage
@@ -13,7 +12,6 @@ index.html
 karma.conf.js
 rollup.config.js
 src
-style.css
 tasks
 test
 yarn-error.log

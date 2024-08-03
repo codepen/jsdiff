@@ -1,5 +1,5 @@
 import babel from 'rollup-plugin-babel';
-import pkg from './package.json';
+import pkg from './package.json' assert { type: 'json' };
 
 export default [
   // browser-friendly UMD build
@@ -16,13 +16,13 @@ export default [
         file: pkg.module
       }, {
         format: 'esm',
-        file: pkg['exports']['.'].import
+        file: pkg.exports['.']['import']
       }
     ],
     plugins: [
       babel({
         babelrc: false,
-        presets: [['@babel/preset-env', { targets: {ie: '11'}, modules: false }]],
+        presets: [['@babel/preset-env', { targets: {ie: '11'}, modules: false }]]
       })
     ]
   }

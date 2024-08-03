@@ -73,10 +73,6 @@ module.exports = function(grunt) {
       unit: {
         singleRun: true
       },
-      sauce: {
-        singleRun: true,
-        browsers: ['sl_chrome', 'sl_firefox', 'sl_ie_11']
-      }
     },
 
     uglify: {
@@ -142,13 +138,6 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-mocha-test');
   grunt.loadNpmTasks('grunt-mocha-istanbul');
   grunt.loadNpmTasks('grunt-exec');
-
-  grunt.task.loadTasks('tasks');
-
-  grunt.registerTask('travis',
-    !process.env.KARMA && process.env.SAUCE_USERNAME
-      ? ['clean', 'build', 'karma:unit', 'karma:sauce', 'cover']
-      : ['clean', 'build', 'cover']);
 
   grunt.registerTask('dev', ['clean', 'watch']);
   grunt.registerTask('default', ['clean', 'build', 'cover']);

@@ -1,6 +1,5 @@
-export function parsePatch(uniDiff, options = {}) {
-  let diffstr = uniDiff.split(/\r\n|[\n\v\f\r\x85]/),
-      delimiters = uniDiff.match(/\r\n|[\n\v\f\r\x85]/g) || [],
+export function parsePatch(uniDiff) {
+  let diffstr = uniDiff.split(/\n/),
       list = [],
       i = 0;
 
@@ -36,13 +35,11 @@ export function parsePatch(uniDiff, options = {}) {
 
     while (i < diffstr.length) {
       let line = diffstr[i];
-
-      if ((/^(Index:|diff|\-\-\-|\+\+\+)\s/).test(line)) {
+      if ((/^(Index:\s|diff\s|\-\-\-\s|\+\+\+\s|===================================================================)/).test(line)) {
         break;
       } else if ((/^@@/).test(line)) {
         index.hunks.push(parseHunk());
-      } else if (line && options.strict) {
-        // Ignore unexpected content unless in strict mode
+      } else if (line) {
         throw new Error('Unknown line ' + (i + 1) + ' ' + JSON.stringify(line));
       } else {
         i++;
@@ -53,7 +50,7 @@ export function parsePatch(uniDiff, options = {}) {
   // Parses the --- and +++ headers, if none are found, no lines
   // are consumed.
   function parseFileHeader(index) {
-    const fileHeader = (/^(---|\+\+\+)\s+(.*)$/).exec(diffstr[i]);
+    const fileHeader = (/^(---|\+\+\+)\s+(.*)\r?$/).exec(diffstr[i]);
     if (fileHeader) {
       let keyPrefix = fileHeader[1] === '---' ? 'old' : 'new';
       const data = fileHeader[2].split('\t', 2);
@@ -80,8 +77,7 @@ export function parsePatch(uniDiff, options = {}) {
       oldLines: typeof chunkHeader[2] === 'undefined' ? 1 : +chunkHeader[2],
       newStart: +chunkHeader[3],
       newLines: typeof chunkHeader[4] === 'undefined' ? 1 : +chunkHeader[4],
-      lines: [],
-      linedelimiters: []
+      lines: []
     };
 
     // Unified Diff Format quirk: If the chunk size is 0,
@@ -96,20 +92,14 @@ export function parsePatch(uniDiff, options = {}) {
 
     let addCount = 0,
         removeCount = 0;
-    for (; i < diffstr.length; i++) {
-      // Lines starting with '---' could be mistaken for the "remove line" operation
-      // But they could be the header for the next file. Therefore prune such cases out.
-      if (diffstr[i].indexOf('--- ') === 0
-            && (i + 2 < diffstr.length)
-            && diffstr[i + 1].indexOf('+++ ') === 0
-            && diffstr[i + 2].indexOf('@@') === 0) {
-          break;
-      }
+    for (
+      ;
+      i < diffstr.length && (removeCount < hunk.oldLines || addCount < hunk.newLines || diffstr[i]?.startsWith('\\'));
+      i++
+    ) {
       let operation = (diffstr[i].length == 0 && i != (diffstr.length - 1)) ? ' ' : diffstr[i][0];
-
       if (operation === '+' || operation === '-' || operation === ' ' || operation === '\\') {
         hunk.lines.push(diffstr[i]);
-        hunk.linedelimiters.push(delimiters[i] || '\n');
 
         if (operation === '+') {
           addCount++;
@@ -120,7 +110,7 @@ export function parsePatch(uniDiff, options = {}) {
           removeCount++;
         }
       } else {
-        break;
+        throw new Error(`Hunk at line ${chunkHeaderIndex + 1} contained invalid line ${diffstr[i]}`);
       }
     }
 
@@ -132,14 +122,12 @@ export function parsePatch(uniDiff, options = {}) {
       hunk.oldLines = 0;
     }
 
-    // Perform optional sanity checking
-    if (options.strict) {
-      if (addCount !== hunk.newLines) {
-        throw new Error('Added line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
-      }
-      if (removeCount !== hunk.oldLines) {
-        throw new Error('Removed line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
-      }
+    // Perform sanity checking
+    if (addCount !== hunk.newLines) {
+      throw new Error('Added line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
+    }
+    if (removeCount !== hunk.oldLines) {
+      throw new Error('Removed line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
     }
 
     return hunk;

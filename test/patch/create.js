@@ -1,5 +1,6 @@
 import {diffWords} from '../../lib';
 import {createPatch, createTwoFilesPatch, formatPatch, structuredPatch} from '../../lib/patch/create';
+import {parsePatch} from '../../lib/patch/parse';
 
 import {expect} from 'chai';
 
@@ -103,6 +104,39 @@ describe('patch/create', function() {
         + '\\ No newline at end of file\n'
         + '+line44\n'
         + '\\ No newline at end of file\n');
+    });
+
+    it('should get the "No newline" position right in the case from https://github.com/kpdecker/jsdiff/issues/531', function() {
+      const oldContent = '1st line.\n2nd line.\n3rd line.';
+      const newContent = 'Z11 thing.\nA New thing.\n2nd line.\nNEW LINE.\n3rd line.\n\nSOMETHING ELSE.';
+
+      const diff = createPatch(
+        'a.txt',
+        oldContent,
+        newContent,
+        undefined,
+        undefined,
+        { context: 3 },
+      );
+
+      expect(diff).to.equal(
+        'Index: a.txt\n'
+        + '===================================================================\n'
+        + '--- a.txt\n'
+        + '+++ a.txt\n'
+        + '@@ -1,3 +1,7 @@\n'
+        + '-1st line.\n'
+        + '+Z11 thing.\n'
+        + '+A New thing.\n'
+        + ' 2nd line.\n'
+        + '-3rd line.\n'
+        + '\\ No newline at end of file\n'
+        + '+NEW LINE.\n'
+        + '+3rd line.\n'
+        + '+\n'
+        + '+SOMETHING ELSE.\n'
+        + '\\ No newline at end of file\n'
+      );
     });
 
     it('should output "no newline" at end of file message on context missing nl', function() {
@@ -632,6 +666,10 @@ describe('patch/create', function() {
       expect(diffResult).to.equal(expectedResult);
     });
 
+    it('should respect maxEditLength', function() {
+      expect(createPatch('test', 'line1\nline2\nline3\n', 'lineX\nlineY\nlineZ\nline42\n', 'header1', 'header2', {maxEditLength: 1})).to.be.undefined;
+    });
+
     describe('ignoreWhitespace', function() {
       it('ignoreWhitespace: false', function() {
         const expectedResult =
@@ -664,44 +702,110 @@ describe('patch/create', function() {
     });
 
     describe('newlineIsToken', function() {
-      it('newlineIsToken: false', function() {
-        const expectedResult =
-          'Index: testFileName\n'
-          + '===================================================================\n'
-          + '--- testFileName\n'
-          + '+++ testFileName\n'
-          + '@@ -1,2 +1,2 @@\n'
-
-          // Diff is shown as entire row, eventhough text is unchanged
-          + '-line\n'
-          + '+line\r\n'
-
-          + ' line\n'
-          + '\\ No newline at end of file\n';
-
-        const diffResult = createPatch('testFileName', 'line\nline', 'line\r\nline', undefined, undefined, {newlineIsToken: false});
-        expect(diffResult).to.equal(expectedResult);
+      // See https://github.com/kpdecker/jsdiff/pull/345#issuecomment-2255886105
+      it("isn't allowed any more, since the patches produced were nonsense", function() {
+        expect(() => {
+          createPatch('testFileName', 'line\nline', 'line\r\nline', undefined, undefined, {newlineIsToken: true});
+        }).to['throw']('newlineIsToken may not be used with patch-generation functions, only with diffing functions');
       });
+    });
 
-      it('newlineIsToken: true', function() {
-        const expectedResult =
-          'Index: testFileName\n'
-          + '===================================================================\n'
-          + '--- testFileName\n'
-          + '+++ testFileName\n'
-          + '@@ -1,3 +1,3 @@\n'
-          + ' line\n'
+    it('takes an optional callback option', function(done) {
+      createPatch(
+        'test',
+        'foo\nbar\nbaz\n', 'foo\nbarcelona\nbaz\n',
+        'header1', 'header2',
+        {callback: (res) => {
+          expect(res).to.eql(
+            'Index: test\n'
+            + '===================================================================\n'
+            + '--- test\theader1\n'
+            + '+++ test\theader2\n'
+            + '@@ -1,3 +1,3 @@\n'
+            + ' foo\n'
+            + '-bar\n'
+            + '+barcelona\n'
+            + ' baz\n'
+          );
+          done();
+        }}
+      );
+    });
 
-          // Newline change is shown as a single diff
-          + '-\n'
-          + '+\r\n'
+    it('lets you provide a callback by passing a function as the `options` parameter', function(done) {
+      createPatch(
+        'test',
+        'foo\nbar\nbaz\n', 'foo\nbarcelona\nbaz\n',
+        'header1', 'header2',
+        res => {
+          expect(res).to.eql(
+            'Index: test\n'
+            + '===================================================================\n'
+            + '--- test\theader1\n'
+            + '+++ test\theader2\n'
+            + '@@ -1,3 +1,3 @@\n'
+            + ' foo\n'
+            + '-bar\n'
+            + '+barcelona\n'
+            + ' baz\n'
+          );
+          done();
+        }
+      );
+    });
 
-          + ' line\n'
-          + '\\ No newline at end of file\n';
+    it('still supports early termination when in async mode', function(done) {
+      createPatch(
+        'test',
+        'foo\nbar\nbaz\n', 'food\nbarcelona\nbaz\n',
+        'header1', 'header2',
+        {
+          maxEditLength: 1,
+          callback: (res) => {
+            expect(res).to.eql(undefined);
+            done();
+          }
+        }
+      );
+    });
+  });
 
-        const diffResult = createPatch('testFileName', 'line\nline', 'line\r\nline', undefined, undefined, {newlineIsToken: true});
-        expect(diffResult).to.equal(expectedResult);
-      });
+  describe('stripTrailingCr', function() {
+    it('stripTrailingCr: false', function() {
+      const expectedResult =
+      '===================================================================\n'
+      + '--- foo\n'
+      + '+++ bar\n'
+      + '@@ -1,2 +1,2 @@\n'
+      + '\-line\n'
+      + '\+line\r\n'
+      + '\ line\n'
+      + '\\ No newline at end of file\n';
+      expect(createTwoFilesPatch(
+        'foo',
+        'bar',
+        'line\nline',
+        'line\r\nline',
+        undefined,
+        undefined,
+        {stripTrailingCr: false}
+      )).to.equal(expectedResult);
+    });
+
+    it('stripTrailingCr: true', function() {
+      const expectedResult =
+        '===================================================================\n'
+        + '--- foo\n'
+        + '+++ bar\n';
+      expect(createTwoFilesPatch(
+        'foo',
+        'bar',
+        'line\nline',
+        'line\r\nline',
+        undefined,
+        undefined,
+        {stripTrailingCr: true}
+      )).to.equal(expectedResult);
     });
   });
 
@@ -720,6 +824,44 @@ describe('patch/create', function() {
           lines: [' line2', ' line3', '-line4', '+line5', '\\ No newline at end of file']
         }]
       });
+    });
+
+    it('takes an optional callback option', function(done) {
+      structuredPatch(
+        'oldfile', 'newfile',
+        'foo\nbar\nbaz\n', 'foo\nbarcelona\nbaz\n',
+        'header1', 'header2',
+        {callback: (res) => {
+          expect(res).to.eql({
+            oldFileName: 'oldfile', newFileName: 'newfile',
+            oldHeader: 'header1', newHeader: 'header2',
+            hunks: [{
+              oldStart: 1, oldLines: 3, newStart: 1, newLines: 3,
+              lines: [' foo', '-bar', '+barcelona', ' baz']
+            }]
+          });
+          done();
+        }}
+      );
+    });
+
+    it('lets you provide a callback by passing a function as the `options` parameter', function(done) {
+      structuredPatch(
+        'oldfile', 'newfile',
+        'foo\nbar\nbaz\n', 'foo\nbarcelona\nbaz\n',
+        'header1', 'header2',
+        res => {
+          expect(res).to.eql({
+            oldFileName: 'oldfile', newFileName: 'newfile',
+            oldHeader: 'header1', newHeader: 'header2',
+            hunks: [{
+              oldStart: 1, oldLines: 3, newStart: 1, newLines: 3,
+              lines: [' foo', '-bar', '+barcelona', ' baz']
+            }]
+          });
+          done();
+        }
+      );
     });
 
     describe('given options.maxEditLength', function() {
@@ -748,6 +890,91 @@ describe('patch/create', function() {
         'line2\nline3\nline4\n', 'line2\nline3\nline5',
         'header1', 'header2'
       ));
+    });
+    it('supports serializing an array of structured patch objects into a single patch file in unified diff format', function() {
+      const patch = [
+        {
+          oldFileName: 'foo',
+          oldHeader: '2023-12-29 15:48:17.976616966 +0000',
+          newFileName: 'bar',
+          newHeader: '2023-12-29 15:48:21.400516845 +0000',
+          hunks: [
+            {
+              oldStart: 1,
+              oldLines: 1,
+              newStart: 1,
+              newLines: 1,
+              lines: [
+                '-xxx',
+                '+yyy'
+              ]
+            }
+          ]
+        },
+        {
+          oldFileName: 'baz',
+          oldHeader: '2023-12-29 15:48:29.376283616 +0000',
+          newFileName: 'qux',
+          newHeader: '2023-12-29 15:48:32.908180343 +0000',
+          hunks: [
+            {
+              oldStart: 1,
+              oldLines: 1,
+              newStart: 1,
+              newLines: 1,
+              lines: [
+                '-aaa',
+                '+bbb'
+              ]
+            }
+          ]
+        }
+      ];
+      expect(formatPatch(patch)).to.equal(
+        '===================================================================\n' +
+        '--- foo\t2023-12-29 15:48:17.976616966 +0000\n' +
+        '+++ bar\t2023-12-29 15:48:21.400516845 +0000\n' +
+        '@@ -1,1 +1,1 @@\n' +
+        '-xxx\n' +
+        '+yyy\n' +
+        '\n' +
+        '===================================================================\n' +
+        '--- baz\t2023-12-29 15:48:29.376283616 +0000\n' +
+        '+++ qux\t2023-12-29 15:48:32.908180343 +0000\n' +
+        '@@ -1,1 +1,1 @@\n' +
+        '-aaa\n' +
+        '+bbb\n'
+      );
+    });
+    it('should roughly be the inverse of parsePatch', function() {
+      // There are so many differences in how a semantically-equivalent patch
+      // can be formatted in unified diff format, AND in JsDiff's structured
+      // patch format as long as https://github.com/kpdecker/jsdiff/issues/434
+      // goes unresolved, that a stronger claim than "roughly the inverse" is
+      // sadly not possible here.
+
+      // Check 1: starting with a patch in uniform diff format, does
+      // formatPatch(parsePatch(...)) round-trip?
+      const uniformPatch = '===================================================================\n' +
+        '--- baz\t2023-12-29 15:48:29.376283616 +0000\n' +
+        '+++ qux\t2023-12-29 15:48:32.908180343 +0000\n' +
+        '@@ -1,1 +1,1 @@\n' +
+        '-aaa\n' +
+        '+bbb\n';
+      expect(formatPatch(parsePatch(uniformPatch))).to.equal(uniformPatch);
+
+      // Check 2: starting with a structuredPatch, does formatting and then
+      // parsing again basically round-trip as long as we wrap it in an array
+      // to match the output of parsePatch?
+      const patchObj = structuredPatch(
+        'oldfile', 'newfile',
+        'line2\nline3\nline4\n', 'line2\nline3\nline5',
+        'header1', 'header2'
+      );
+
+      const roundTrippedPatch = parsePatch(formatPatch([patchObj]));
+
+      expect(roundTrippedPatch).to.deep.equal([patchObj]);
     });
   });
 });
