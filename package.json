@@ -1,6 +1,6 @@
 {
   "name": "diff",
-  "version": "5.2.0",
+  "version": "5.4.0",
   "description": "A JavaScript text diff implementation.",
   "keywords": [
     "diff",
@@ -73,5 +73,5 @@
     "webpack": "^5.90.3",
     "webpack-dev-server": "^5.0.3"
   },
-  "optionalDependencies": {}
+  "packageManager": "yarn@4.4.0"
 }
