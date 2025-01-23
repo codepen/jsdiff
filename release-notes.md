@@ -1,8 +1,16 @@
 # Release Notes
 
-## Future breaking 6.0.0 release
+## 7.0.0
 
-[Commits](https://github.com/kpdecker/jsdiff/compare/master...v6.0.0-staging)
+Just a single (breaking) bugfix, undoing a behaviour change introduced accidentally in 6.0.0:
+
+- [#554](https://github.com/kpdecker/jsdiff/pull/554) **`diffWords` treats numbers and underscores as word characters again.** This behaviour was broken in v6.0.0.
+
+## 6.0.0
+
+This is a release containing many, *many* breaking changes. The objective of this release was to carry out a mass fix, in one go, of all the open bugs and design problems that required breaking changes to fix. A substantial, but exhaustive, changelog is below.
+
+[Commits](https://github.com/kpdecker/jsdiff/compare/v5.2.0...v6.0.0)
 
 - [#497](https://github.com/kpdecker/jsdiff/pull/497) **`diffWords` behavior has been radically changed.** Previously, even with `ignoreWhitespace: true`, runs of whitespace were tokens, which led to unhelpful and unintuitive diffing behavior in typical texts. Specifically, even when two texts contained overlapping passages, `diffWords` would sometimes choose to delete all the words from the old text and insert them anew in their new positions in order to avoid having to delete or insert whitespace tokens. Whitespace sequences are no longer tokens as of this release, which affects both the generated diffs and the `count`s.
 
@@ -25,9 +33,9 @@
 - [#490](https://github.com/kpdecker/jsdiff/pull/490) **When calling diffing functions in async mode by passing a `callback` option, the diff result will now be passed as the *first* argument to the callback instead of the second.** (Previously, the first argument was never used at all and would always have value `undefined`.)
 - [#489](github.com/kpdecker/jsdiff/pull/489) **`this.options` no longer exists on `Diff` objects.** Instead, `options` is now passed as an argument to methods that rely on options, like `equals(left, right, options)`. This fixes a race condition in async mode, where diffing behaviour could be changed mid-execution if a concurrent usage of the same `Diff` instances overwrote its `options`.
 - [#518](https://github.com/kpdecker/jsdiff/pull/518) **`linedelimiters` no longer exists** on patch objects; instead, when a patch with Windows-style CRLF line endings is parsed, **the lines in `lines` will end with `\r`**. There is now a **new `autoConvertLineEndings` option, on by default**, which makes it so that when a patch with Windows-style line endings is applied to a source file with Unix style line endings, the patch gets autoconverted to use Unix-style line endings, and when a patch with Unix-style line endings is applied to a source file with Windows-style line endings, it gets autoconverted to use Windows-style line endings.
-- [#521](https://github.com/kpdecker/jsdiff/pull/521) **the `callback` option is now supported by `structuredPatch`, `createPatch
+- [#521](https://github.com/kpdecker/jsdiff/pull/521) **the `callback` option is now supported by `structuredPatch`, `createPatch`, and `createTwoFilesPatch`**
 - [#529](https://github.com/kpdecker/jsdiff/pull/529) **`parsePatch` can now parse patches where lines starting with `--` or `++` are deleted/inserted**; previously, there were edge cases where the parser would choke on valid patches or give wrong results.
-- [#530](https://github.com/kpdecker/jsdiff/pull/530) **Added `ignoreNewlineAtEof` option` to `diffLines`**
+- [#530](https://github.com/kpdecker/jsdiff/pull/530) **Added `ignoreNewlineAtEof` option to `diffLines`**
 - [#533](https://github.com/kpdecker/jsdiff/pull/533) **`applyPatch` uses an entirely new algorithm for fuzzy matching.** Differences between the old and new algorithm are as follows:
   * The `fuzzFactor` now indicates the maximum [*Levenshtein* distance](https://en.wikipedia.org/wiki/Levenshtein_distance) that there can be between the context shown in a hunk and the actual file content at a location where we try to apply the hunk. (Previously, it represented a maximum [*Hamming* distance](https://en.wikipedia.org/wiki/Hamming_distance), meaning that a single insertion or deletion in the source file could stop a hunk from applying even with a high `fuzzFactor`.)
   * A hunk containing a deletion can now only be applied in a context where the line to be deleted actually appears verbatim. (Previously, as long as enough context lines in the hunk matched, `applyPatch` would apply the hunk anyway and delete a completely different line.)
@@ -38,10 +46,10 @@
 
 ## v5.2.0
 
-[Commits](https://github.com/kpdecker/jsdiff/compare/v5.1.0...master)
+[Commits](https://github.com/kpdecker/jsdiff/compare/v5.1.0...v5.2.0)
 
 - [#411](https://github.com/kpdecker/jsdiff/pull/411) Big performance improvement. Previously an O(n) array-copying operation inside the innermost loop of jsdiff's base diffing code increased the overall worst-case time complexity of computing a diff from O(n²) to O(n³). This is now fixed, bringing the worst-case time complexity down to what it theoretically should be for a Myers diff implementation.
-- [#448](https://github.com/kpdecker/jsdiff/pull/411) Performance improvement. Diagonals whose furthest-reaching D-path would go off the edge of the edit graph are now skipped, rather than being pointlessly considered as called for by the original Myers diff algorithm. This dramatically speeds up computing diffs where the new text just appends or truncates content at the end of the old text.
+- [#448](https://github.com/kpdecker/jsdiff/pull/448) Performance improvement. Diagonals whose furthest-reaching D-path would go off the edge of the edit graph are now skipped, rather than being pointlessly considered as called for by the original Myers diff algorithm. This dramatically speeds up computing diffs where the new text just appends or truncates content at the end of the old text.
 - [#351](https://github.com/kpdecker/jsdiff/issues/351) Importing from the lib folder - e.g. `require("diff/lib/diff/word.js")` - will work again now. This had been broken for users on the latest version of Node since Node 17.5.0, which changed how Node interprets the `exports` property in jsdiff's `package.json` file.
 - [#344](https://github.com/kpdecker/jsdiff/issues/344) `diffLines`, `createTwoFilesPatch`, and other patch-creation methods now take an optional `stripTrailingCr: true` option which causes Windows-style `\r\n` line endings to be replaced with Unix-style `\n` line endings before calculating the diff, just like GNU `diff`'s `--strip-trailing-cr` flag.
 - [#451](https://github.com/kpdecker/jsdiff/pull/451) Added `diff.formatPatch`.
